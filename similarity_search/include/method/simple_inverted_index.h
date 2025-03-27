@@ -54,6 +54,9 @@ class SimplInvIndex : public Index<dist_t> {
   virtual void SaveIndex(const string& location) override;
   virtual void LoadIndex(const string& location) override;
 
+  void SerializeIndex(vector<uint8_t> &data);
+  void UnserializeIndex(vector<uint8_t> &data);
+
   void SetQueryTimeParams(const AnyParams& QueryTimeParams) override;
 
   ~SimplInvIndex() override;

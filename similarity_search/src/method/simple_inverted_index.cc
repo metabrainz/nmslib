@@ -169,6 +169,32 @@ void SimplInvIndex<dist_t>::SaveIndex(const string& location) {
   output.close();
 }
 
+template <typename T>
+void writeBinaryPODToVector(vector<uint8_t> &data, const T& podRef) {
+  int i;
+  for(char *ptr = (char*)&podRef, i = 0; i < sizeof(T); i++, ptr++)
+      data.push_back(*(ptr++));
+}
+
+template <typename dist_t>
+void SimplInvIndex<dist_t>::SerializeIndex(vector<uint8_t> &data) {
+
+  size_t entryQty = index_.size(); 
+  writeBinaryPODToVector(data, entryQty);
+
+  for (const auto & e: index_) {
+    uint32_t elemId = e.first;
+    writeBinaryPODToVector(data, elemId);
+    const PostList& pl = *e.second;
+    writeBinaryPODToVector(data, pl.qty_);
+    for (size_t i = 0; i < pl.qty_; i++) {
+      const PostEntry& e = pl.entries_[i];
+      writeBinaryPODToVector(data, e.doc_id_);
+      writeBinaryPODToVector(data, e.val_);
+    }
+  }
+}
+
 template <typename dist_t>
 void SimplInvIndex<dist_t>::LoadIndex(const string& location) {
   std::ifstream input(location, std::ios::binary);
@@ -203,6 +229,47 @@ void SimplInvIndex<dist_t>::LoadIndex(const string& location) {
     index_.insert(make_pair(wordId, unique_ptr<PostList>(pl.release())));
   }
 }
+
+template <typename T>
+static char *readBinaryPODFromVector(char *in_ptr, T& podRef) {
+  char *out_ptr;
+  int i;
+  for(i = 0, out_ptr = (char *)&podRef; i < sizeof(T); i++, in_ptr++, out_ptr++) 
+      *in_ptr = *out_ptr;
+
+  return in_ptr;
+}
+
+template <typename dist_t>
+void SimplInvIndex<dist_t>::UnserializeIndex(vector<uint8_t> &data) {
+
+  index_.clear();
+  size_t entryQty = 0;
+
+  char *input = (char *)data.data();
+  input = readBinaryPODFromVector(input, entryQty);
+
+  index_.clear();
+
+  for (size_t qi = 0; qi < entryQty; qi++) {
+    uint32_t wordId = 0;
+    input = readBinaryPODFromVector(input, wordId);
+    size_t postQty = 0;
+    input = readBinaryPODFromVector(input, postQty);
+    auto pl = unique_ptr<PostList>(new PostList(postQty));
+    for (size_t pi = 0; pi < postQty; pi++) {
+      PostEntry& e = pl->entries_[pi];
+      input = readBinaryPODFromVector(input, e.doc_id_);
+      input = readBinaryPODFromVector(input, e.val_);
+    }
+    index_.insert(make_pair(wordId, unique_ptr<PostList>(pl.release())));
+  }
+
+  // Remove the data we consumed from the vect
+  int difference = input - (char *)data.data();
+  data.erase(data.begin(), data.begin() + difference);
+}
+
 
 template <typename dist_t>
 void SimplInvIndex<dist_t>::CreateIndex(const AnyParams& IndexParams) {
