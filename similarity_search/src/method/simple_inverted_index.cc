@@ -171,27 +171,34 @@ void SimplInvIndex<dist_t>::SaveIndex(const string& location) {
 
 template <typename T>
 void writeBinaryPODToVector(vector<uint8_t> &data, const T& podRef) {
-  int i;
+  long unsigned int i;
   for(char *ptr = (char*)&podRef, i = 0; i < sizeof(T); i++, ptr++)
-      data.push_back(*(ptr++));
+      data.push_back(*ptr);
 }
 
 template <typename dist_t>
-void SimplInvIndex<dist_t>::SerializeIndex(vector<uint8_t> &data) {
+void SimplInvIndex<dist_t>::SerializeIndex(vector<uint8_t> &serial, const ObjectVector &objects) {
 
   size_t entryQty = index_.size(); 
-  writeBinaryPODToVector(data, entryQty);
+  writeBinaryPODToVector(serial, entryQty);
+  printf("write %d entries\n", entryQty);
 
   for (const auto & e: index_) {
     uint32_t elemId = e.first;
-    writeBinaryPODToVector(data, elemId);
+    writeBinaryPODToVector(serial, elemId);
     const PostList& pl = *e.second;
-    writeBinaryPODToVector(data, pl.qty_);
+    writeBinaryPODToVector(serial, pl.qty_);
     for (size_t i = 0; i < pl.qty_; i++) {
       const PostEntry& e = pl.entries_[i];
-      writeBinaryPODToVector(data, e.doc_id_);
-      writeBinaryPODToVector(data, e.val_);
+      writeBinaryPODToVector(serial, e.doc_id_);
+      writeBinaryPODToVector(serial, e.val_);
     }
+  }
+  printf("write %d objects\n", objects.size());
+  writeBinaryPODToVector(serial, size_t(objects.size()));
+  for (unsigned i = 0; i < objects.size(); i++) {
+    const Object* o = objects[i];
+    writeBinaryPODToVector(serial, o->bufferlength());
   }
 }
 
@@ -233,7 +240,7 @@ void SimplInvIndex<dist_t>::LoadIndex(const string& location) {
 template <typename T>
 static char *readBinaryPODFromVector(char *in_ptr, T& podRef) {
   char *out_ptr;
-  int i;
+  long unsigned int i;
   for(i = 0, out_ptr = (char *)&podRef; i < sizeof(T); i++, in_ptr++, out_ptr++) 
       *in_ptr = *out_ptr;
 
@@ -241,13 +248,42 @@ static char *readBinaryPODFromVector(char *in_ptr, T& podRef) {
 }
 
 template <typename dist_t>
-void SimplInvIndex<dist_t>::UnserializeIndex(vector<uint8_t> &data) {
+unique_ptr<DataFileInputState>
+Space<dist_t>::ReadObjectVectorFromBinData(ObjectVector& data,
+                                           vector<string>& vExternIds,
+                                           const std::string& fileName,
+                                           const IdTypeUnsign maxQty) const {
+  CHECK_MSG(data.empty(), "this function expects data to be empty on call");
+  size_t qty;
+  size_t objSize;
+  std::ifstream input(fileName, std::ios::binary);
+  CHECK_MSG(input, "Cannot open file '" + fileName + "' for reading");
+  input.exceptions(std::ios::badbit | std::ios::failbit);
+  vExternIds.clear();
+
+  readBinaryPOD(input, qty);
+
+  for (unsigned i = 0; i < std::min(qty, size_t(maxQty)); ++i) {
+    readBinaryPOD(input, objSize);
+    unique_ptr<char []> buf(new char[objSize]);
+    input.read(&buf[0], objSize);
+    // true guarantees that the Object will take ownership of memory
+    // less than ideal, but ok for now
+    data.push_back(new Object(buf.release(), true));
+  }
+  
+  return unique_ptr<DataFileInputState>(new DataFileInputState());
+}
+
+template <typename dist_t>
+void SimplInvIndex<dist_t>::UnserializeIndex(vector<uint8_t> &data, ObjectVector &objects) {
 
   index_.clear();
   size_t entryQty = 0;
 
   char *input = (char *)data.data();
   input = readBinaryPODFromVector(input, entryQty);
+  printf("read %d entries\n", entryQty);
 
   index_.clear();
 
@@ -263,6 +299,21 @@ void SimplInvIndex<dist_t>::UnserializeIndex(vector<uint8_t> &data) {
       input = readBinaryPODFromVector(input, e.val_);
     }
     index_.insert(make_pair(wordId, unique_ptr<PostList>(pl.release())));
+  }
+
+  int num_objects;
+  input = readBinaryPODFromVector(input, num_objects);
+  printf("read %d objects!\n", num_objects);
+  for (unsigned i = 0; i < num_objects; ++i) {
+    size_t objSize;
+    input = readBinaryPODFromVector(input, objSize);
+    printf("read %d object bytes!\n", objSize);
+    unique_ptr<char []> buf(new char[objSize]);
+    memcpy(&buf[0], input, objSize);
+    input += objSize;
+    // true guarantees that the Object will take ownership of memory
+    // less than ideal, but ok for now
+    objects.push_back(new Object(buf.release(), true));
   }
 
   // Remove the data we consumed from the vect
