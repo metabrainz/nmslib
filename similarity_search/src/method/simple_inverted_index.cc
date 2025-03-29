@@ -172,8 +172,9 @@ void SimplInvIndex<dist_t>::SaveIndex(const string& location) {
 template <typename T>
 void writeBinaryPODToVector(vector<uint8_t> &data, const T& podRef) {
   long unsigned int i;
-  for(char *ptr = (char*)&podRef, i = 0; i < sizeof(T); i++, ptr++)
+  for(char *ptr = (char*)&podRef, i = 0; i < sizeof(T); i++, ptr++) {
       data.push_back(*ptr);
+  }
 }
 
 template <typename dist_t>
@@ -181,7 +182,6 @@ void SimplInvIndex<dist_t>::SerializeIndex(vector<uint8_t> &serial, const Object
 
   size_t entryQty = index_.size(); 
   writeBinaryPODToVector(serial, entryQty);
-  printf("write %d entries\n", entryQty);
 
   for (const auto & e: index_) {
     uint32_t elemId = e.first;
@@ -194,11 +194,13 @@ void SimplInvIndex<dist_t>::SerializeIndex(vector<uint8_t> &serial, const Object
       writeBinaryPODToVector(serial, e.val_);
     }
   }
-  printf("write %d objects\n", objects.size());
   writeBinaryPODToVector(serial, size_t(objects.size()));
   for (unsigned i = 0; i < objects.size(); i++) {
     const Object* o = objects[i];
     writeBinaryPODToVector(serial, o->bufferlength());
+    const char *ptr = o->buffer(); 
+    for(int i = 0; i < o->bufferlength(); i++, ptr++)
+      serial.push_back(*ptr);
   }
 }
 
@@ -241,8 +243,9 @@ template <typename T>
 static char *readBinaryPODFromVector(char *in_ptr, T& podRef) {
   char *out_ptr;
   long unsigned int i;
-  for(i = 0, out_ptr = (char *)&podRef; i < sizeof(T); i++, in_ptr++, out_ptr++) 
-      *in_ptr = *out_ptr;
+  for(i = 0, out_ptr = (char *)&podRef; i < sizeof(T); i++, in_ptr++, out_ptr++) {
+      *out_ptr = *in_ptr;
+  }
 
   return in_ptr;
 }
@@ -283,7 +286,6 @@ void SimplInvIndex<dist_t>::UnserializeIndex(vector<uint8_t> &data, ObjectVector
 
   char *input = (char *)data.data();
   input = readBinaryPODFromVector(input, entryQty);
-  printf("read %d entries\n", entryQty);
 
   index_.clear();
 
@@ -301,13 +303,11 @@ void SimplInvIndex<dist_t>::UnserializeIndex(vector<uint8_t> &data, ObjectVector
     index_.insert(make_pair(wordId, unique_ptr<PostList>(pl.release())));
   }
 
-  int num_objects;
+  size_t num_objects;
   input = readBinaryPODFromVector(input, num_objects);
-  printf("read %d objects!\n", num_objects);
   for (unsigned i = 0; i < num_objects; ++i) {
     size_t objSize;
     input = readBinaryPODFromVector(input, objSize);
-    printf("read %d object bytes!\n", objSize);
     unique_ptr<char []> buf(new char[objSize]);
     memcpy(&buf[0], input, objSize);
     input += objSize;
