@@ -178,7 +178,7 @@ void writeBinaryPODToVector(vector<uint8_t> &data, const T& podRef) {
 }
 
 template <typename dist_t>
-void SimplInvIndex<dist_t>::SerializeIndex(vector<uint8_t> &serial, const ObjectVector &objects) {
+void SimplInvIndex<dist_t>::SerializeIndex(vector<uint8_t> &serial) {
 
   size_t entryQty = index_.size(); 
   writeBinaryPODToVector(serial, entryQty);
@@ -194,9 +194,9 @@ void SimplInvIndex<dist_t>::SerializeIndex(vector<uint8_t> &serial, const Object
       writeBinaryPODToVector(serial, e.val_);
     }
   }
-  writeBinaryPODToVector(serial, size_t(objects.size()));
-  for (unsigned i = 0; i < objects.size(); i++) {
-    const Object* o = objects[i];
+  writeBinaryPODToVector(serial, size_t(data_.size()));
+  for (unsigned i = 0; i < data_.size(); i++) {
+    const Object* o = data_[i];
     writeBinaryPODToVector(serial, o->bufferlength());
     const char *ptr = o->buffer(); 
     for(int i = 0; i < o->bufferlength(); i++, ptr++)
@@ -279,7 +279,7 @@ Space<dist_t>::ReadObjectVectorFromBinData(ObjectVector& data,
 }
 
 template <typename dist_t>
-void SimplInvIndex<dist_t>::UnserializeIndex(vector<uint8_t> &data, ObjectVector &objects) {
+void SimplInvIndex<dist_t>::UnserializeIndex(vector<uint8_t> &data) {
 
   index_.clear();
   size_t entryQty = 0;
@@ -304,6 +304,7 @@ void SimplInvIndex<dist_t>::UnserializeIndex(vector<uint8_t> &data, ObjectVector
   }
 
   size_t num_objects;
+  data_.clear();
   input = readBinaryPODFromVector(input, num_objects);
   for (unsigned i = 0; i < num_objects; ++i) {
     size_t objSize;
@@ -313,7 +314,7 @@ void SimplInvIndex<dist_t>::UnserializeIndex(vector<uint8_t> &data, ObjectVector
     input += objSize;
     // true guarantees that the Object will take ownership of memory
     // less than ideal, but ok for now
-    objects.push_back(new Object(buf.release(), true));
+    data_.push_back(new Object(buf.release(), true));
   }
 
   // Remove the data we consumed from the vect

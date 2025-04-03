@@ -124,6 +124,18 @@ struct IndexWrapper {
     index->SaveIndex(filename);
   }
 
+  void serializeIndex(vector<uint8_t> &data) {
+    if (!index) {
+      throw std::invalid_argument("Must call createIndex or loadIndex before this method");
+    }
+    py::gil_scoped_release l;
+    if (save_data) {
+      vector<string> dummy;
+      space->WriteObjectVectorBinData(data, dummy, filename + data_suff);
+    }
+    index->SaveIndex(filename);
+  }
+
   py::object knnQuery(py::object input, size_t k) {
     if (!index) {
       throw std::invalid_argument("Must call createIndex or loadIndex before this method");

@@ -61,10 +61,10 @@ public:
   virtual void LoadIndex(const string& location) {
     throw runtime_error("LoadIndex is not implemented for method: " + StrDesc());
   }
-  virtual void SerializeIndex(vector<uint8_t> &data, const ObjectVector &objects) {
+  virtual void SerializeIndex(vector<uint8_t> &data) {
     throw runtime_error("SerializeIndex is not implemented for method: " + StrDesc());
   }
-  virtual void UnserializeIndex(vector<uint8_t> &data, ObjectVector &objects) {
+  virtual void UnserializeIndex(vector<uint8_t> &data) {
     throw runtime_error("UnserializeIndex is not implemented for method: " + StrDesc());
   }
 
